@@ -200,6 +200,23 @@ Prebuilt libhegel static libraries are used for `x86_64-linux`,
 (e.g. Windows, which libhegel ships as MSVC import libraries) need
 `-Dlibhegel=…`.
 
+## Development
+
+The dev environment is defined with [devenv](https://devenv.sh): Zig 0.17.0
+comes from a locked nixpkgs (`devenv.lock`), and the libhegel archive is
+fetched by Nix against the same SHA-256 as `build.zig`, so builds need no
+network access beyond the Nix store.
+
+```sh
+devenv shell                # zig 0.17.0 + the pinned libhegel on PATH
+hz-test                     # zig build test against the Nix-fetched libhegel
+hz-examples                 # zig build examples, likewise
+hz-check                    # what CI runs: zig fmt --check, tests and examples in Debug and ReleaseSafe
+devenv test                 # hz-check in a fresh environment
+```
+
+Without devenv, any Zig 0.17.0 works; `build.zig` fetches libhegel itself.
+
 ## Notes
 
 - libhegel is a Rust `staticlib`; linking it needs an unwinder, which hegel-zig
@@ -208,7 +225,8 @@ Prebuilt libhegel static libraries are used for `x86_64-linux`,
 - Panics inside a property abort the process, as they do in any Zig test;
   return errors instead.
 - `include/hegel.h` is the unmodified header of the pinned libhegel release.
-  Upgrading libhegel means replacing it and the checksums in `build.zig`.
+  Upgrading libhegel means replacing it and the checksums in `build.zig` and
+  `devenv.nix`.
 
 ## License
 

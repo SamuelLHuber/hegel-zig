@@ -26,3 +26,21 @@ jobs:
         run: zig build test -Doptimize=${{ matrix.optimize }} --summary all
       - name: Ported libhegel examples
         run: zig build examples -Doptimize=${{ matrix.optimize }} --summary all
+
+  devenv:
+    name: devenv / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+      - run: nix profile install nixpkgs#devenv
+      - name: devenv test (zig fmt, tests and examples in Debug and ReleaseSafe)
+        run: devenv test
+

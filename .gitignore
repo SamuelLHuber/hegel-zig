@@ -1,3 +1,6 @@
 .zig-cache/
 zig-out/
 .hegel/
+.devenv*
+devenv.local.nix
+.direnv/
