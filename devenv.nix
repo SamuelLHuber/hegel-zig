@@ -55,7 +55,10 @@ let
       }
     else
       pkgs.zig_0_17;
-  libhegelFlag = lib.optionalString (libhegel != null) "-Dlibhegel=${libhegel}";
+  # nixpkgs' Apple SDK leaves libiconv to its own package.
+  buildFlags =
+    lib.optionalString (libhegel != null) "-Dlibhegel=${libhegel}"
+    + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin " --search-prefix ${pkgs.libiconv}";
 in
 {
   # On macOS, Zig finds the SDK through `xcode-select` and `xcrun`; xcbuild
@@ -65,8 +68,8 @@ in
   env.HEGEL_ZIG_LIBHEGEL = lib.optionalString (libhegel != null) "${libhegel}";
 
   scripts = {
-    hz-test.exec = ''zig build test ${libhegelFlag} --summary all "$@"'';
-    hz-examples.exec = ''zig build examples ${libhegelFlag} --summary all "$@"'';
+    hz-test.exec = ''zig build test ${buildFlags} --summary all "$@"'';
+    hz-examples.exec = ''zig build examples ${buildFlags} --summary all "$@"'';
     hz-check.exec = ''
       set -euo pipefail
       zig fmt --check .
@@ -77,11 +80,10 @@ in
     '';
   };
 
-  # Zig takes its search paths from NIX_CFLAGS_COMPILE and NIX_LDFLAGS (which
-  # carry libiconv) instead of detecting them, so the SDK frameworks
-  # (CoreFoundation, Security) have to be passed the Nix way.
+  # Zig skips SDK detection when NIX_CFLAGS_COMPILE or NIX_LDFLAGS is set;
+  # without them it finds the pinned Apple SDK through xcrun.
   enterShell = lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
-    export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE:-} -iframework $(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks"
+    unset NIX_CFLAGS_COMPILE NIX_CFLAGS_LINK NIX_LDFLAGS
   '' + ''
     echo "hegel-zig: zig $(zig version), libhegel ${libhegelVersion} (''${HEGEL_ZIG_LIBHEGEL:-fetched by build.zig})"
     echo "  hz-test, hz-examples, hz-check (what CI runs)"
