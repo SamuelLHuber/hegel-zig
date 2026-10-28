@@ -48,7 +48,11 @@ in
     '';
   };
 
-  enterShell = ''
+  # Zig skips SDK detection when NIX_CFLAGS_COMPILE is set, so frameworks
+  # (CoreFoundation, Security) have to be passed the Nix way.
+  enterShell = lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+    export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE:-} -iframework $(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks"
+  '' + ''
     echo "hegel-zig: zig $(zig version), libhegel ${libhegelVersion} (''${HEGEL_ZIG_LIBHEGEL:-fetched by build.zig})"
     echo "  hz-test, hz-examples, hz-check (what CI runs)"
   '';
