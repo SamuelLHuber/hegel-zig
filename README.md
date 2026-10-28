@@ -165,6 +165,11 @@ idiomatic layer on top earns its place because:
 - **Upgrades happen in one place.** When libhegel's ABI changes, this layer
   and its tests change, not every project that uses it.
 
+For coding agents, [`.agents/skills/hegel-zig/SKILL.md`](.agents/skills/hegel-zig/SKILL.md)
+covers installation, writing properties, generators, stateful testing and
+the raw C API. Copy it into your project's `.agents/skills/` (or
+`.claude/skills/`) to use it there.
+
 ## Examples: the libhegel C samples, in Zig
 
 [`examples/`](examples) is a one-to-one port of
