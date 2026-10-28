@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.optimize }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        optimize: [Debug, ReleaseSafe]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - run: zig version
+      - run: zig fmt --check .
+        if: matrix.os == 'ubuntu-latest' && matrix.optimize == 'Debug'
+      - name: Tests
+        run: zig build test -Doptimize=${{ matrix.optimize }} --summary all
+      - name: Ported libhegel examples
+        run: zig build examples -Doptimize=${{ matrix.optimize }} --summary all
