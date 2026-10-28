@@ -13,7 +13,7 @@ and offers an idiomatic API.
 Zig can consume C headers directly, so hegel-zig does not need a hand-written
 FFI layer at all: `build.zig` runs `translate-c` on libhegel's own `hegel.h`
 and links the prebuilt static library from the matching libhegel release.
-On top of that sits a small idiomatic layer (`src/hegel.zig`, `src/gen.zig`).
+On top of that sits an idiomatic layer (`src/hegel.zig`, `src/gen.zig`).
 
 Requires **Zig 0.17.0**. Pinned to **libhegel 0.48.0**.
 
@@ -139,6 +139,31 @@ Text printed with `tc.noteLine` and test-case printers is appended to the
 failure report.
 Unset fields keep the engine defaults, including `HEGEL_*` environment
 variables and `hegel.toml` profiles.
+
+## Why a wrapper, if Zig can call libhegel directly?
+
+You can skip the wrapper: `hegel.c` is the whole translated C API, and
+[`examples/`](examples) uses nothing else. The package has to exist either
+way, since something must fetch the pinned library, translate the header and
+link it (`link_libcpp` for the Rust unwinder, plus system libraries). The
+idiomatic layer on top earns its place because:
+
+- **The C API is a protocol.** A correct run loops over `hegel_next_test_case`
+  / `hegel_mark_complete`, maps `STOP_TEST`, `ASSUME` and `RETRY` differently
+  from real failures, records draws only on the final replay, frees each
+  engine-owned value with its matching function, and collects every
+  failure's origin, report and reproduction blob. `hegel.check` does this
+  once; written by hand, it is easy to get subtly wrong, and the usual
+  symptom is a test that passes when it should fail.
+- **It has pitfalls you only find by testing against the engine**, e.g. a
+  `hegel_context_t` must not be shared between threads, and the print
+  document needs `hegel_printer_resolve` once clones exist. Fixing them here
+  means every user gets the fix, and CI checks it on every platform.
+- **Zig can do more than C**: generators type-checked and composed at
+  compile time, `gen.default(T)` derived via `@typeInfo`, per-test-case
+  arenas, and counterexamples reported with Zig error return traces.
+- **Upgrades happen in one place.** When libhegel's ABI changes, this layer
+  and its tests change, not every project that uses it.
 
 ## Examples: the libhegel C samples, in Zig
 
