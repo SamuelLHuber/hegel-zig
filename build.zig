@@ -66,7 +66,7 @@ pub fn build(b: *std.Build) void {
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &.{};
     const unit_tests = b.addTest(.{ .root_module = hegel_mod, .filters = test_filters });
     test_step.dependOn(&b.addRunArtifact(unit_tests).step);
-    for ([_][]const u8{ "tests/properties.zig", "tests/failures.zig" }) |path| {
+    for ([_][]const u8{ "tests/properties.zig", "tests/failures.zig", "tests/generators.zig", "tests/c_api.zig" }) |path| {
         const t = b.addTest(.{
             .root_module = b.createModule(.{
                 .root_source_file = b.path(path),

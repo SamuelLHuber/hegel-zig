@@ -82,17 +82,35 @@ than on every shrink attempt.
 | `hegel.checkWithContext(settings, ctx, property)` | same, for `fn (@TypeOf(ctx), *TestCase) !void` |
 | `hegel.run(gpa, settings, property)` | returns a `RunResult` (status, failures, reports, reproduction blobs) |
 | `tc.draw(generator)` | draw a value; top-level draws appear in the report |
-| `tc.assume(cond)`, `tc.note(fmt, args)`, `tc.target(v, label)`, `tc.event(label)` | |
+| `hegel.replay(settings, blob, property)` | run one reproduction blob; `.reproduced` or `.passed` |
+| `hegel.resolveSettings`, `registerProfile`, `setDefaultProfile`, `setUnicodeVersion` | read back effective settings; process-wide configuration |
+| `tc.assume(cond)`, `tc.note(fmt, args)`, `tc.noteLine(s)`, `tc.target(v, label)`, `tc.event(label)`, `tc.eventValue(v, label)` | |
 | `tc.allocator()` | arena that lives for the test case |
-| `tc.pool()`, `tc.stateMachine(rules, max_steps)`, `tc.collection(min, max)`, `tc.startSpan/stopSpan` | stateful-testing and low-level engine primitives |
+| `tc.clone()`, `tc.block(indent)`, `tc.setWorker(i)` | handles for concurrent workers and indented output regions |
+| `tc.printer(opts)`, `hegel.Printer.init(opts)` | libhegel's pretty-printer: groups, breaks, comments, reflow, deferred holes, speculation |
+| `tc.pool()` (`add`, `generate`, `restore`), `tc.collection(min, max)`, `tc.startSpan/stopSpan`, `tc.label`, `tc.labelCombine`, `tc.recursion(depth, leaves)` | low-level engine primitives |
+| `tc.stateMachine(rules, max_steps)`, `tc.stateMachineWith(.{ .rules, .invariants, .min_concurrency, .max_concurrency, .step_count })` | stateful testing: rule groups, weights, invariants, workers (`nextGroup`, `nextRuleFor`, `rejectFor`, `shouldCheckInvariant`) |
 | `hegel.c` | the full translated libhegel C API |
+
+Every one of the 144 functions in libhegel 0.48.0's `hegel.h` is wrapped
+by this layer; `hegel.c` remains available for direct use.
 
 Generators (`hegel.gen`): `integers(T, .{ .min, .max })` (any width, including
 `u64`/`i128` via libhegel's big-integer draw), `floats(f32|f64, .{…})`,
 `booleans()`, `bytes(.{…})`, `text(.{ .codec, .min_size, .max_size, … })`,
 `fromRegex(pattern, .{ .fullmatch })`, `just(v)`, `sampledFrom(T, items)`,
 `lists(g, .{…})`, `optionals(g)`, `oneOf(.{ g1, g2, … })`, `map(g, f)`,
-`filter(g, pred)`.
+`filter(g, pred)`, `weightedBooleans(p)`, `tuples(.{ g1, g2, … })`,
+`arrays(g, n)`, `uniqueLists(g, .{…})`, `hashMaps(kg, vg, .{…})`,
+`hashSets(g, .{…})`, `permutations(T, items)`, `flatMap(g, f)`,
+`composite(T, f)`, `recursive(T, leaf, extend, .{ .max_depth, .max_leaves })`,
+`default(T)` (derived from the type at compile time: ints, floats, bools,
+enums, optionals, arrays, `[]const` slices, structs, tagged unions),
+`dates(.{…})`, `times(.{…})`, `datetimes(.{…})`, `uuids(.{ .version })`,
+`ipv4Addresses()`, `ipv6Addresses()`, `ipAddresses()`, `emails()`, `urls()`,
+`domains(.{ .max_length })`, and `fromGrammar(&grammar, .{…})` for
+[Lark](https://lark-parser.readthedocs.io/) grammars built with
+`gen.Grammar.init(gpa, source, .{ .start, .alphabet, .explicit, .files, .diagnostic })`.
 
 A generator is any value with a `Value` type and a
 `generate(self, *TestCase) hegel.DrawError!Value` method, so composite
@@ -113,7 +131,12 @@ const Points = struct {
 `Settings` mirrors libhegel's: `test_cases`, `seed`, `derandomize`,
 `database` (`""` disables it), `database_key`, `verbosity`,
 `report_multiple_failures`, `stop_on_first_failure`, `print_blob`, `profile`,
-`reproduce` (a reproduction blob) and `output` (redirect engine output).
+`reproduce` (a reproduction blob), `output` (redirect engine output),
+`backend`, `nondeterminism_strictness`, `show_statistics`,
+`unbounded_choices`, `phases`, `suppress_health_check` and `test_location`.
+`RunResult` carries `error_kind` and `failed_health_check` when a run errors.
+Text printed with `tc.noteLine` and test-case printers is appended to the
+failure report.
 Unset fields keep the engine defaults, including `HEGEL_*` environment
 variables and `hegel.toml` profiles.
 
