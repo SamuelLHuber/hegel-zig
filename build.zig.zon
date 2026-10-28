@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.17.0",
     .dependencies = .{},
     .paths = .{
+        ".agents",
         "build.zig",
         "build.zig.zon",
         "include",
