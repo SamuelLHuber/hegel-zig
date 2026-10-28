@@ -29,7 +29,9 @@ let
   libhegelFlag = lib.optionalString (libhegel != null) "-Dlibhegel=${libhegel}";
 in
 {
-  packages = [ pkgs.zig_0_17 ];
+  # On macOS, Zig finds the SDK through `xcode-select` and `xcrun`; xcbuild
+  # provides both, resolving to devenv's pinned `apple.sdk`.
+  packages = [ pkgs.zig_0_17 ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.xcbuild ];
 
   env.HEGEL_ZIG_LIBHEGEL = lib.optionalString (libhegel != null) "${libhegel}";
 
@@ -54,6 +56,7 @@ in
   enterTest = ''
     set -euo pipefail
     test "$(zig version)" = "0.17.0"
+    ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin "xcode-select --print-path && xcrun --sdk macosx --show-sdk-path"}
     grep -q 'libhegel_version = "${libhegelVersion}"' build.zig
     ${lib.concatMapStrings (a: "grep -q ${a.sha256} build.zig\n") (lib.attrValues libhegelArtifacts)}
     hz-check
