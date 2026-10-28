@@ -210,7 +210,8 @@ verified by checksum before use:
 | `hegel.h` | libhegel 0.48.0 | vendored in `include/` | SHA-256 in `build.zig`, checked on every build |
 | libhegel static library | 0.48.0 | `build.zig` (and `devenv.nix`) | SHA-256 per platform, checked after download; `devenv test` checks both files list the same hashes |
 | Zig (CI) | 0.17.0 | `.github/scripts/install-zig.sh` | SHA-256 from ziglang.org's `index.json` |
-| Zig (devenv) | 0.17.0 | `devenv.yaml` nixpkgs revision + `devenv.lock` | Nix `narHash`; `devenv test` asserts `zig version` |
+| Zig (devenv, macOS) | 0.17.0 | `devenv.nix` (same ziglang.org tarball as CI) | SHA-256 via Nix `fetchurl`; `devenv test` checks it matches `install-zig.sh` and asserts `zig version` |
+| Zig (devenv, Linux), xcbuild and Apple SDK (macOS) | nixpkgs revision | `devenv.yaml` + `devenv.lock` | Nix `narHash` |
 | devenv (CI) | nixpkgs revision in `devenv.lock` | `devenv.lock` | Nix `narHash` |
 | GitHub Actions | `actions/checkout` v4.4.0, `cachix/install-nix-action` v31.11.3 | `.github/workflows/ci.yml` | commit SHA |
 
@@ -224,9 +225,10 @@ instead, and that archive is not checked.
 ## Development
 
 The dev environment is defined with [devenv](https://devenv.sh): Zig 0.17.0
-comes from a locked nixpkgs (`devenv.lock`), and the libhegel archive is
-fetched by Nix against the same SHA-256 as `build.zig`, so builds need no
-network access beyond the Nix store.
+comes from the locked nixpkgs (on macOS, the official ziglang.org build)
+and libhegel is the pinned release archive, both fetched by Nix against
+the same hashes as CI and `build.zig`, so
+builds need no network access beyond the Nix store.
 
 ```sh
 devenv shell                # zig 0.17.0 + the pinned libhegel on PATH

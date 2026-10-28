@@ -26,12 +26,41 @@ let
         url = "https://github.com/hegeldev/hegel/releases/download/libhegel/${libhegelVersion}/${artifact.name}";
         inherit (artifact) sha256;
       };
+  # Linux uses nixpkgs' Zig, which links against and runs on the Nix store's
+  # glibc. On macOS, nixpkgs' zig_0_17 dies with SIGBUS compiling the tests, so
+  # it is the official ziglang.org build: the same tarball and SHA-256 as
+  # .github/scripts/install-zig.sh.
+  zigVersion = "0.17.0";
+  zigMacos = {
+    triple = "aarch64-macos";
+    sha256 = "b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a";
+  };
+  zig =
+    if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
+      pkgs.stdenvNoCC.mkDerivation {
+        pname = "zig";
+        version = zigVersion;
+        src = pkgs.fetchurl {
+          url = "https://ziglang.org/download/${zigVersion}/zig-${zigMacos.triple}-${zigVersion}.tar.xz";
+          inherit (zigMacos) sha256;
+        };
+        dontConfigure = true;
+        dontBuild = true;
+        dontFixup = true;
+        installPhase = ''
+          mkdir -p $out/bin $out/share/zig
+          cp -r . $out/share/zig
+          ln -s $out/share/zig/zig $out/bin/zig
+        '';
+      }
+    else
+      pkgs.zig_0_17;
   libhegelFlag = lib.optionalString (libhegel != null) "-Dlibhegel=${libhegel}";
 in
 {
   # On macOS, Zig finds the SDK through `xcode-select` and `xcrun`; xcbuild
   # provides both, resolving to devenv's pinned `apple.sdk`.
-  packages = [ pkgs.zig_0_17 ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.xcbuild ];
+  packages = [ zig ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.xcbuild ];
 
   env.HEGEL_ZIG_LIBHEGEL = lib.optionalString (libhegel != null) "${libhegel}";
 
@@ -48,10 +77,10 @@ in
     '';
   };
 
-  # Zig skips SDK detection when NIX_CFLAGS_COMPILE is set, so frameworks
-  # (CoreFoundation, Security) have to be passed the Nix way.
+  # Zig skips macOS SDK detection when NIX_CFLAGS_COMPILE is set; without the
+  # NIX_* flags it finds the pinned Apple SDK through xcrun.
   enterShell = lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
-    export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE:-} -iframework $(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks"
+    unset NIX_CFLAGS_COMPILE NIX_CFLAGS_LINK NIX_LDFLAGS
   '' + ''
     echo "hegel-zig: zig $(zig version), libhegel ${libhegelVersion} (''${HEGEL_ZIG_LIBHEGEL:-fetched by build.zig})"
     echo "  hz-test, hz-examples, hz-check (what CI runs)"
@@ -59,7 +88,8 @@ in
 
   enterTest = ''
     set -euo pipefail
-    test "$(zig version)" = "0.17.0"
+    test "$(zig version)" = "${zigVersion}"
+    grep -q ${zigMacos.sha256} .github/scripts/install-zig.sh
     ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin "xcode-select --print-path && xcrun --sdk macosx --show-sdk-path"}
     grep -q 'libhegel_version = "${libhegelVersion}"' build.zig
     ${lib.concatMapStrings (a: "grep -q ${a.sha256} build.zig\n") (lib.attrValues libhegelArtifacts)}
