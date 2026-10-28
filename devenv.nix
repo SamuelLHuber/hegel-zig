@@ -54,6 +54,8 @@ in
   enterTest = ''
     set -euo pipefail
     test "$(zig version)" = "0.17.0"
+    grep -q 'libhegel_version = "${libhegelVersion}"' build.zig
+    ${lib.concatMapStrings (a: "grep -q ${a.sha256} build.zig\n") (lib.attrValues libhegelArtifacts)}
     hz-check
   '';
 }

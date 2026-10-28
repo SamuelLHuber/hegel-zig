@@ -4,6 +4,10 @@ const std = @import("std");
 /// header from the same release.
 pub const libhegel_version = "0.48.0";
 
+/// SHA-256 of `hegel.h` in the libhegel release, checked against the vendored
+/// copy on every build.
+const header_sha256 = "d2cb105afe125c6648e28b4dff4f0dd949bca3b4cdbe10975d8a923fa4c21442";
+
 const Artifact = struct { name: []const u8, sha256: []const u8 };
 
 fn artifactFor(target: std.Target) ?Artifact {
@@ -19,6 +23,18 @@ fn artifactFor(target: std.Target) ?Artifact {
         },
         else => null,
     };
+}
+
+fn verifyHeader() void {
+    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(@embedFile("include/hegel.h"), &digest, .{});
+    const actual = std.fmt.bytesToHex(digest, .lower);
+    if (!std.mem.eql(u8, &actual, header_sha256)) {
+        std.debug.panic(
+            "include/hegel.h has sha256 {s}, expected {s} (libhegel {s})",
+            .{ &actual, header_sha256, libhegel_version },
+        );
+    }
 }
 
 const examples = [_][]const u8{
@@ -40,6 +56,7 @@ pub fn build(b: *std.Build) void {
         "Path to a libhegel static library to link instead of downloading the pinned release",
     );
 
+    verifyHeader();
     const libhegel = libhegelArchive(b, target.result, libhegel_override);
 
     const translate = b.addTranslateC(.{

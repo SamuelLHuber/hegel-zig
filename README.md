@@ -200,6 +200,27 @@ Prebuilt libhegel static libraries are used for `x86_64-linux`,
 (e.g. Windows, which libhegel ships as MSVC import libraries) need
 `-Dlibhegel=…`.
 
+## Dependencies
+
+Every input is either in this repository or pinned to an exact version and
+verified by checksum before use:
+
+| Dependency | Version | Where it is pinned | Verified by |
+|---|---|---|---|
+| `hegel.h` | libhegel 0.48.0 | vendored in `include/` | SHA-256 in `build.zig`, checked on every build |
+| libhegel static library | 0.48.0 | `build.zig` (and `devenv.nix`) | SHA-256 per platform, checked after download; `devenv test` checks both files list the same hashes |
+| Zig (CI) | 0.17.0 | `.github/scripts/install-zig.sh` | SHA-256 from ziglang.org's `index.json` |
+| Zig (devenv) | 0.17.0 | `devenv.yaml` nixpkgs revision + `devenv.lock` | Nix `narHash`; `devenv test` asserts `zig version` |
+| devenv (CI) | nixpkgs revision in `devenv.lock` | `devenv.lock` | Nix `narHash` |
+| GitHub Actions | `actions/checkout` v4.4.0, `cachix/install-nix-action` v31.11.3 | `.github/workflows/ci.yml` | commit SHA |
+
+There are no Zig package dependencies (`build.zig.zon` `.dependencies` is
+empty). The libhegel archives (26-36 MB each) are not committed. `zig fetch`
+cannot download GitHub release assets (it rejects their
+`Content-Disposition` header), so `tools/fetch_libhegel.zig` downloads them
+at build time and checks the SHA-256. `-Dlibhegel=...` links a local archive
+instead, and that archive is not checked.
+
 ## Development
 
 The dev environment is defined with [devenv](https://devenv.sh): Zig 0.17.0
