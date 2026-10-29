@@ -20,7 +20,7 @@ Requires **Zig 0.17.0**. Pinned to **libhegel 0.48.0**.
 ## Install
 
 ```sh
-zig fetch --save git+https://github.com/SamuelLHuber/hegel-zig
+zig fetch --save git+https://github.com/SamuelLHuber/hegel-zig#v0.1.0
 ```
 
 ```zig
@@ -239,6 +239,20 @@ devenv test                 # hz-check in a fresh environment
 ```
 
 Without devenv, any Zig 0.17.0 works; `build.zig` fetches libhegel itself.
+
+## Releasing
+
+Releases are tagged `v<version>` from `main`; see [CHANGELOG.md](CHANGELOG.md).
+
+1. In a PR, set `.version` in `build.zig.zon`, add a `## [<version>]`
+   section to `CHANGELOG.md` and update the `#v<version>` in Install above.
+2. After it merges, tag the merge commit: `git tag -a v<version> -m v<version>`
+   and push the tag.
+3. The Release workflow runs the full CI matrix on the tag, then
+   `.github/scripts/release.sh`, which checks the tag against `build.zig.zon`
+   and `CHANGELOG.md`, checks that `zig fetch` of the tag gives the same
+   package hash as the tree, and publishes the GitHub release with the
+   changelog section, the install command and the package hash.
 
 ## Notes
 
