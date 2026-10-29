@@ -13,7 +13,7 @@ and offers an idiomatic API.
 Zig can consume C headers directly, so hegel-zig does not need a hand-written
 FFI layer at all: `build.zig` runs `translate-c` on libhegel's own `hegel.h`
 and links the prebuilt static library from the matching libhegel release.
-On top of that sits a small idiomatic layer (`src/hegel.zig`, `src/gen.zig`).
+On top of that sits an idiomatic layer (`src/hegel.zig`, `src/gen.zig`).
 
 Requires **Zig 0.17.0**. Pinned to **libhegel 0.48.0**.
 
@@ -82,17 +82,35 @@ than on every shrink attempt.
 | `hegel.checkWithContext(settings, ctx, property)` | same, for `fn (@TypeOf(ctx), *TestCase) !void` |
 | `hegel.run(gpa, settings, property)` | returns a `RunResult` (status, failures, reports, reproduction blobs) |
 | `tc.draw(generator)` | draw a value; top-level draws appear in the report |
-| `tc.assume(cond)`, `tc.note(fmt, args)`, `tc.target(v, label)`, `tc.event(label)` | |
+| `hegel.replay(settings, blob, property)` | run one reproduction blob; `.reproduced` or `.passed` |
+| `hegel.resolveSettings`, `registerProfile`, `setDefaultProfile`, `setUnicodeVersion` | read back effective settings; process-wide configuration |
+| `tc.assume(cond)`, `tc.note(fmt, args)`, `tc.noteLine(s)`, `tc.target(v, label)`, `tc.event(label)`, `tc.eventValue(v, label)` | |
 | `tc.allocator()` | arena that lives for the test case |
-| `tc.pool()`, `tc.stateMachine(rules, max_steps)`, `tc.collection(min, max)`, `tc.startSpan/stopSpan` | stateful-testing and low-level engine primitives |
+| `tc.clone()`, `tc.block(indent)`, `tc.setWorker(i)` | handles for concurrent workers and indented output regions |
+| `tc.printer(opts)`, `hegel.Printer.init(opts)` | libhegel's pretty-printer: groups, breaks, comments, reflow, deferred holes, speculation |
+| `tc.pool()` (`add`, `generate`, `restore`), `tc.collection(min, max)`, `tc.startSpan/stopSpan`, `tc.label`, `tc.labelCombine`, `tc.recursion(depth, leaves)` | low-level engine primitives |
+| `tc.stateMachine(rules, max_steps)`, `tc.stateMachineWith(.{ .rules, .invariants, .min_concurrency, .max_concurrency, .step_count })` | stateful testing: rule groups, weights, invariants, workers (`nextGroup`, `nextRuleFor`, `rejectFor`, `shouldCheckInvariant`) |
 | `hegel.c` | the full translated libhegel C API |
+
+Every one of the 144 functions in libhegel 0.48.0's `hegel.h` is wrapped
+by this layer; `hegel.c` remains available for direct use.
 
 Generators (`hegel.gen`): `integers(T, .{ .min, .max })` (any width, including
 `u64`/`i128` via libhegel's big-integer draw), `floats(f32|f64, .{…})`,
 `booleans()`, `bytes(.{…})`, `text(.{ .codec, .min_size, .max_size, … })`,
 `fromRegex(pattern, .{ .fullmatch })`, `just(v)`, `sampledFrom(T, items)`,
 `lists(g, .{…})`, `optionals(g)`, `oneOf(.{ g1, g2, … })`, `map(g, f)`,
-`filter(g, pred)`.
+`filter(g, pred)`, `weightedBooleans(p)`, `tuples(.{ g1, g2, … })`,
+`arrays(g, n)`, `uniqueLists(g, .{…})`, `hashMaps(kg, vg, .{…})`,
+`hashSets(g, .{…})`, `permutations(T, items)`, `flatMap(g, f)`,
+`composite(T, f)`, `recursive(T, leaf, extend, .{ .max_depth, .max_leaves })`,
+`default(T)` (derived from the type at compile time: ints, floats, bools,
+enums, optionals, arrays, `[]const` slices, structs, tagged unions),
+`dates(.{…})`, `times(.{…})`, `datetimes(.{…})`, `uuids(.{ .version })`,
+`ipv4Addresses()`, `ipv6Addresses()`, `ipAddresses()`, `emails()`, `urls()`,
+`domains(.{ .max_length })`, and `fromGrammar(&grammar, .{…})` for
+[Lark](https://lark-parser.readthedocs.io/) grammars built with
+`gen.Grammar.init(gpa, source, .{ .start, .alphabet, .explicit, .files, .diagnostic })`.
 
 A generator is any value with a `Value` type and a
 `generate(self, *TestCase) hegel.DrawError!Value` method, so composite
@@ -113,9 +131,44 @@ const Points = struct {
 `Settings` mirrors libhegel's: `test_cases`, `seed`, `derandomize`,
 `database` (`""` disables it), `database_key`, `verbosity`,
 `report_multiple_failures`, `stop_on_first_failure`, `print_blob`, `profile`,
-`reproduce` (a reproduction blob) and `output` (redirect engine output).
+`reproduce` (a reproduction blob), `output` (redirect engine output),
+`backend`, `nondeterminism_strictness`, `show_statistics`,
+`unbounded_choices`, `phases`, `suppress_health_check` and `test_location`.
+`RunResult` carries `error_kind` and `failed_health_check` when a run errors.
+Text printed with `tc.noteLine` and test-case printers is appended to the
+failure report.
 Unset fields keep the engine defaults, including `HEGEL_*` environment
 variables and `hegel.toml` profiles.
+
+## Why a wrapper, if Zig can call libhegel directly?
+
+You can skip the wrapper: `hegel.c` is the whole translated C API, and
+[`examples/`](examples) uses nothing else. The package has to exist either
+way, since something must fetch the pinned library, translate the header and
+link it (`link_libcpp` for the Rust unwinder, plus system libraries). The
+idiomatic layer on top earns its place because:
+
+- **The C API is a protocol.** A correct run loops over `hegel_next_test_case`
+  / `hegel_mark_complete`, maps `STOP_TEST`, `ASSUME` and `RETRY` differently
+  from real failures, records draws only on the final replay, frees each
+  engine-owned value with its matching function, and collects every
+  failure's origin, report and reproduction blob. `hegel.check` does this
+  once; written by hand, it is easy to get subtly wrong, and the usual
+  symptom is a test that passes when it should fail.
+- **It has pitfalls you only find by testing against the engine**, e.g. a
+  `hegel_context_t` must not be shared between threads, and the print
+  document needs `hegel_printer_resolve` once clones exist. Fixing them here
+  means every user gets the fix, and CI checks it on every platform.
+- **Zig can do more than C**: generators type-checked and composed at
+  compile time, `gen.default(T)` derived via `@typeInfo`, per-test-case
+  arenas, and counterexamples reported with Zig error return traces.
+- **Upgrades happen in one place.** When libhegel's ABI changes, this layer
+  and its tests change, not every project that uses it.
+
+For coding agents, [`.agents/skills/hegel-zig/SKILL.md`](.agents/skills/hegel-zig/SKILL.md)
+covers installation, writing properties, generators, stateful testing and
+the raw C API. Copy it into your project's `.agents/skills/` (or
+`.claude/skills/`) to use it there.
 
 ## Examples: the libhegel C samples, in Zig
 
@@ -147,6 +200,46 @@ Prebuilt libhegel static libraries are used for `x86_64-linux`,
 (e.g. Windows, which libhegel ships as MSVC import libraries) need
 `-Dlibhegel=…`.
 
+## Dependencies
+
+Every input is either in this repository or pinned to an exact version and
+verified by checksum before use:
+
+| Dependency | Version | Where it is pinned | Verified by |
+|---|---|---|---|
+| `hegel.h` | libhegel 0.48.0 | vendored in `include/` | SHA-256 in `build.zig`, checked on every build |
+| libhegel static library | 0.48.0 | `build.zig` (and `devenv.nix`) | SHA-256 per platform, checked after download; `devenv test` checks both files list the same hashes |
+| Zig (CI) | 0.17.0 | `.github/scripts/install-zig.sh` | SHA-256 from ziglang.org's `index.json` |
+| Zig (devenv, macOS) | 0.17.0 | `devenv.nix` (same ziglang.org tarball as CI) | SHA-256 via Nix `fetchurl`; `devenv test` checks it matches `install-zig.sh` and asserts `zig version` |
+| Zig (devenv, Linux), xcbuild and Apple SDK (macOS) | nixpkgs revision | `devenv.yaml` + `devenv.lock` | Nix `narHash` |
+| devenv (CI) | nixpkgs revision in `devenv.lock` | `devenv.lock` | Nix `narHash` |
+| GitHub Actions | `actions/checkout` v4.4.0, `cachix/install-nix-action` v31.11.3 | `.github/workflows/ci.yml` | commit SHA |
+
+There are no Zig package dependencies (`build.zig.zon` `.dependencies` is
+empty). The libhegel archives (26-36 MB each) are not committed. `zig fetch`
+cannot download GitHub release assets (it rejects their
+`Content-Disposition` header), so `tools/fetch_libhegel.zig` downloads them
+at build time and checks the SHA-256. `-Dlibhegel=...` links a local archive
+instead, and that archive is not checked.
+
+## Development
+
+The dev environment is defined with [devenv](https://devenv.sh): Zig 0.17.0
+comes from the locked nixpkgs (on macOS, the official ziglang.org build)
+and libhegel is the pinned release archive, both fetched by Nix against
+the same hashes as CI and `build.zig`, so
+builds need no network access beyond the Nix store.
+
+```sh
+devenv shell                # zig 0.17.0 + the pinned libhegel on PATH
+hz-test                     # zig build test against the Nix-fetched libhegel
+hz-examples                 # zig build examples, likewise
+hz-check                    # what CI runs: zig fmt --check, tests and examples in Debug and ReleaseSafe
+devenv test                 # hz-check in a fresh environment
+```
+
+Without devenv, any Zig 0.17.0 works; `build.zig` fetches libhegel itself.
+
 ## Notes
 
 - libhegel is a Rust `staticlib`; linking it needs an unwinder, which hegel-zig
@@ -155,7 +248,8 @@ Prebuilt libhegel static libraries are used for `x86_64-linux`,
 - Panics inside a property abort the process, as they do in any Zig test;
   return errors instead.
 - `include/hegel.h` is the unmodified header of the pinned libhegel release.
-  Upgrading libhegel means replacing it and the checksums in `build.zig`.
+  Upgrading libhegel means replacing it and the checksums in `build.zig` and
+  `devenv.nix`.
 
 ## License
 
