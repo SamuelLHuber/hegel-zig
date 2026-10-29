@@ -13,7 +13,9 @@ and offers an idiomatic API.
 Zig can consume C headers directly, so hegel-zig does not need a hand-written
 FFI layer at all: `build.zig` runs `translate-c` on libhegel's own `hegel.h`
 and links the prebuilt static library from the matching libhegel release.
-On top of that sits an idiomatic layer (`src/hegel.zig`, `src/gen.zig`).
+On top of that sits an idiomatic layer (`src/hegel.zig`, `src/gen.zig`); see
+[Why a wrapper, if Zig can call libhegel directly?](#why-a-wrapper-if-zig-can-call-libhegel-directly)
+for what it adds over calling `hegel.c` yourself.
 
 Requires **Zig 0.17.0**. Pinned to **libhegel 0.48.0**.
 
