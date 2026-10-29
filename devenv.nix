@@ -55,10 +55,7 @@ let
       }
     else
       pkgs.zig_0_17;
-  # nixpkgs' Apple SDK leaves libiconv to its own package.
-  buildFlags =
-    lib.optionalString (libhegel != null) "-Dlibhegel=${libhegel}"
-    + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin " --search-prefix ${pkgs.libiconv}";
+  buildFlags = lib.optionalString (libhegel != null) "-Dlibhegel=${libhegel}";
 in
 {
   # On macOS, Zig finds the SDK through `xcode-select` and `xcrun`; xcbuild

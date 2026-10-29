@@ -159,7 +159,6 @@ fn linkLibhegel(mod: *std.Build.Module, target: std.Target, archive: std.Build.L
     switch (target.os.tag) {
         .linux => for ([_][]const u8{ "pthread", "dl", "m", "rt" }) |lib| mod.linkSystemLibrary(lib, .{}),
         .macos => {
-            mod.linkSystemLibrary("iconv", .{});
             mod.linkFramework("CoreFoundation", .{});
             mod.linkFramework("Security", .{});
         },
