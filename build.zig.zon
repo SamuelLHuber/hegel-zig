@@ -11,6 +11,7 @@
         "include",
         "src",
         "tools",
+        "CHANGELOG.md",
         "LICENSE",
         "README.md",
     },

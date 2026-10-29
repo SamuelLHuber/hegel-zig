@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 # Every action is pinned to a commit SHA; Zig, libhegel and the devenv
 # toolchain are pinned by version and checksum (see "Dependencies" in README).
